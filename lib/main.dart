@@ -1,6 +1,5 @@
-import 'package:dall_e/dalle_generate_screen.dart';
-import 'package:dall_e/splash_screen.dart';
 import 'package:flutter/material.dart';
+import 'splash_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -12,19 +11,20 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'DallE',
+      title: 'DALL-E App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-          brightness: Brightness.light,
-          primarySwatch: Colors.blue,
-          useMaterial3: true),
+        colorSchemeSeed: Colors.indigo,
+        useMaterial3: true,
+        brightness: Brightness.light,
+      ),
       darkTheme: ThemeData(
-          brightness: Brightness.dark,
-          primarySwatch: Colors.blue,
-          useMaterial3: true),
+        colorSchemeSeed: Colors.indigo,
+        useMaterial3: true,
+        brightness: Brightness.dark,
+      ),
       themeMode: ThemeMode.system,
       home: const SplashScreen(),
     );
   }
 }
-
