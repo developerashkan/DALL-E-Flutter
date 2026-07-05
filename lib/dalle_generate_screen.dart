@@ -1,7 +1,5 @@
-import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'openai_service.dart';
 
 class DallEGenerateScreen extends StatefulWidget {
   const DallEGenerateScreen({super.key});
@@ -11,121 +9,127 @@ class DallEGenerateScreen extends StatefulWidget {
 }
 
 class _DallEGenerateScreenState extends State<DallEGenerateScreen> {
-  TextEditingController input = TextEditingController();
-  String apiKey = "YourApiKey";
-  String url = "https://api.openai.com/v1/images/generations";
-  String? image;
-  String errorReason = "";
-  String inputWarning = "";
+  final TextEditingController _inputController = TextEditingController();
+  final OpenAIService _apiService = OpenAIService();
+  final FocusNode _focusNode = FocusNode();
 
-  void generateImage() async {
-    if (input.text.isNotEmpty) {
-      try {
-        var data = {
-          "prompt": input.text,
-          "n": 1,
-          "size": "256x256",
-        };
-        var res = await http.post(Uri.parse(url),
-            headers: {
-              "Authorization": "Bearer $apiKey",
-              "Content-Type": "application/json"
-            },
-            body: jsonEncode(data));
-        var jsonResponse = jsonDecode(res.body);
-        if (res.statusCode != 200) {
-          setState(() {
-            errorReason = jsonResponse["error"]["message"];
-          });
-          return;
-        }
-        if (kDebugMode) {
-          print(res.statusCode);
-          print(res.body);
-        }
+  String? _imageUrl;
+  String _statusMessage = "Enter a prompt to generate an image.";
+  bool _isLoading = false;
 
-        image = jsonResponse["data"][0]["url"];
-        setState(() {});
-      } on Exception catch (e) {
-        setState(() {
-          errorReason = e.toString();
-        });
-      }
+  @override
+  void dispose() {
+    _inputController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _generateImage() async {
+    final prompt = _inputController.text.trim();
+    if (prompt.isEmpty) {
+      setState(() => _statusMessage = "Please enter a prompt first.");
+      return;
     }
-    else {
-      inputWarning = "enter input";
+
+    _focusNode.unfocus();
+    setState(() {
+      _isLoading = true;
+      _imageUrl = null;
+      _statusMessage = "Generating...";
+    });
+
+    try {
+      final url = await _apiService.generateImage(prompt);
+      
+      if (!mounted) return;
+      setState(() {
+        _imageUrl = url;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = e.toString().replaceAll("Exception: ", "");
+        _isLoading = false;
+      });
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("DALLE"),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            image != null
-                ? Expanded(
-                    child: Image.asset(
-                    image!,
-                    width: 256,
-                    height: 256,
-                  ))
-                : Expanded(
-                    child: Center(
-                      child: Text(
-                        errorReason.isNotEmpty ? errorReason : inputWarning,
-                      ),
-                    ),
+  Widget _buildTextInput() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+      color: Theme.of(context).colorScheme.surface,
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _inputController,
+                focusNode: _focusNode,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _generateImage(),
+                decoration: InputDecoration(
+                  hintText: "Describe an image...",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24.0),
+                    borderSide: BorderSide.none,
                   ),
-            Align(
-              alignment: Alignment.bottomCenter,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 ),
-                child: _buildTextInput(),
               ),
-            )
+            ),
+            const SizedBox(width: 8),
+            FloatingActionButton(
+              elevation: 0,
+              onPressed: _isLoading ? null : _generateImage,
+              child: const Icon(Icons.auto_awesome),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTextInput() {
-    return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 16),
-      child: Row(
-        children: [
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("DALL-E Generator"),
+        centerTitle: true,
+      ),
+      body: Column(
+        children: <Widget>[
           Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(2.0),
-              child: TextField(
-                controller: input,
-                onSubmitted: (value) => generateImage(),
-                decoration:
-                    const InputDecoration.collapsed(hintText: "type ..."),
-              ),
+            child: Center(
+              child: _isLoading
+                  ? const CircularProgressIndicator()
+                  : _imageUrl != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.network(
+                            _imageUrl!,
+                            width: 256,
+                            height: 256,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return const CircularProgressIndicator();
+                            },
+                          ),
+                        )
+                      : Padding(
+                          padding: const EdgeInsets.all(32.0),
+                          child: Text(
+                            _statusMessage,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                        ),
             ),
           ),
-          ButtonBar(
-            children: [
-              Card(
-                elevation: 8,
-                shape: const StadiumBorder(),
-                child: IconButton(
-                  icon: const Icon(Icons.send),
-                  onPressed: () {
-                    generateImage();
-                  },
-                ),
-              ),
-            ],
-          ),
+          _buildTextInput(),
         ],
       ),
     );
